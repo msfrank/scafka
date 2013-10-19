@@ -15,6 +15,7 @@ object ScafkaBuild extends Build {
       name := "scafka",
       version := scafkaVersion,
       scalaVersion := "2.10.2",
+      javacOptions ++= Seq("-source", "1.7"),
       libraryDependencies ++= Seq(
         "com.typesafe.akka" %% "akka-actor" % akkaVersion,
         "com.typesafe.akka" %% "akka-slf4j" % akkaVersion,

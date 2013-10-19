@@ -14,7 +14,7 @@ class KafkaCluster(id: String, brokers: Seq[KafkaBroker]) extends Actor with Act
 
   val correlationCounter = new AtomicInteger()
   val workers: Vector[ActorRef] = brokers.map { broker =>
-    context.actorOf(KafkaWorker.props(broker, correlationCounter), broker.id)
+    context.actorOf(KafkaWorker.props(broker, correlationCounter), "broker-%d".format(broker.node))
   }.toVector
   var router = context.actorOf(Props.empty.withRouter(SmallestMailboxRouter(routees = workers)))
 

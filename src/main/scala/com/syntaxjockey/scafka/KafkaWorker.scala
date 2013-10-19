@@ -134,4 +134,4 @@ object KafkaWorker {
   def props(broker: KafkaBroker, correlationCounter: AtomicInteger) = Props(classOf[KafkaWorker], broker, correlationCounter)
 }
 
-case class KafkaBroker(id: String, host: String, port: Int, version: Int)
+case class KafkaBroker(node: Int, host: String, port: Int)
