@@ -1,6 +1,7 @@
 package com.syntaxjockey.scafka
 
 import akka.actor._
+import akka.io.Tcp
 import akka.io.Tcp._
 import akka.io.IO
 import akka.util.{ByteString, ByteStringBuilder}
@@ -9,10 +10,12 @@ import java.util.concurrent.atomic.AtomicInteger
 import java.net.InetSocketAddress
 import java.nio.ByteOrder
 
-class KafkaWorker(broker: KafkaBroker, correlationCounter: AtomicInteger) extends LoggingFSM[State,Data] with ActorLogging {
-  import akka.io.Tcp
-  import context.dispatcher
+import com.syntaxjockey.scafka.KafkaWorker.{KafkaWorkerState,KafkaWorkerData}
+
+class KafkaWorker(broker: KafkaBroker, correlationCounter: AtomicInteger) extends LoggingFSM[KafkaWorkerState,KafkaWorkerData] with ActorLogging {
+  import KafkaWorker._
   import context.system
+  import context.dispatcher
 
   // config
   val sockaddr = new InetSocketAddress(broker.host, broker.port)
@@ -41,11 +44,13 @@ class KafkaWorker(broker: KafkaBroker, correlationCounter: AtomicInteger) extend
       val io = sender
       log.info("connected to broker {}:{}", remote.getHostName, remote.getPort)
       io ! Register(self)
-      goto(WorkerIdle) using ConnectedToBroker(io, requests, Map.empty, ByteString.empty, None)
+      goto(WorkerConnected) using ConnectedToBroker(io, requests, Map.empty, ByteString.empty, None)
   }
 
   onTransition {
-    case WorkerUnconnected -> WorkerIdle => nextStateData match {
+    case WorkerUnconnected -> WorkerConnected =>
+      context.parent ! BrokerConnected(broker.node)
+      nextStateData match {
       case ConnectedToBroker(_, requests, _, _, _) =>
         if (!requests.isEmpty)
           self ! FlushRequests
@@ -53,7 +58,7 @@ class KafkaWorker(broker: KafkaBroker, correlationCounter: AtomicInteger) extend
     }
   }
 
-  when(WorkerIdle) {
+  when(WorkerConnected) {
 
     case Event(request: KafkaRequest, ConnectedToBroker(io, pending, inflight, leftover, flushTimer)) =>
       log.debug("buffering request")
@@ -108,30 +113,31 @@ class KafkaWorker(broker: KafkaBroker, correlationCounter: AtomicInteger) extend
       }
       stay() using ConnectedToBroker(io, pending, inflight, toRead, flushTimer)
   }
-
-//  when(WritePending) {
-//    case Event(WriteAcknowledged, ProcessingWrite(io, _)) =>
-//      goto(WorkerIdle) using ConnectedToBroker(io, Seq.empty)
-//  }
 }
-
-case object ConnectToBroker
-case class InFlightRequest(sender: ActorRef, request: KafkaRequest)
-case object FlushRequests
-case object WriteAcknowledged extends Event
-
-sealed trait State
-case object WorkerUnconnected extends State
-case object WorkerIdle extends State
-case object WritePending extends State
-
-sealed trait Data
-case class ConnectionPending(attempts: Int, requests: Seq[InFlightRequest]) extends Data
-case class ConnectedToBroker(io: ActorRef, pending: Seq[InFlightRequest], inflight: Map[Int,InFlightRequest], leftover: ByteString, flushTimer: Option[Cancellable]) extends Data
-case class ProcessingWrite(io: ActorRef, write: Write)
 
 object KafkaWorker {
   def props(broker: KafkaBroker, correlationCounter: AtomicInteger) = Props(classOf[KafkaWorker], broker, correlationCounter)
+  
+  case class InFlightRequest(sender: ActorRef, request: KafkaRequest)
+
+  case object ConnectToBroker
+  case object GetConnectionState
+  case object FlushRequests
+  case object WriteAcknowledged extends Event
+
+  sealed trait KafkaWorkerState
+  case object WorkerUnconnected extends KafkaWorkerState
+  case object WorkerConnected extends KafkaWorkerState
+  case object WritePending extends KafkaWorkerState
+
+  sealed trait KafkaWorkerData
+  case class ConnectionPending(attempts: Int, requests: Seq[InFlightRequest]) extends KafkaWorkerData
+  case class ConnectedToBroker(io: ActorRef, pending: Seq[InFlightRequest], inflight: Map[Int,InFlightRequest], leftover: ByteString, flushTimer: Option[Cancellable]) extends KafkaWorkerData
+  case class ProcessingWrite(io: ActorRef, write: Write) extends KafkaWorkerData
 }
 
 case class KafkaBroker(node: Int, host: String, port: Int)
+
+case class BrokerConnected(id: Int)
+case class BrokerDisconnected(id: Int)
+

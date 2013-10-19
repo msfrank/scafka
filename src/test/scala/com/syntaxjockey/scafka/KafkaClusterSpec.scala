@@ -14,7 +14,7 @@ class KafkaClusterSpec(_system: ActorSystem) extends TestKit(_system) with Impli
     system.shutdown()
   }
 
-  "KafkaCluster" must {
+  "A KafkaCluster" must {
 
     "register a cluster programmatically" in {
       Scafka(system).manager ! RegisterCluster("cluster", Seq(KafkaBroker(1, "localhost", 9092)))
