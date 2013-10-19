@@ -27,7 +27,8 @@ object ScafkaBuild extends Build {
         "org.slf4j" % "slf4j-api" % "1.7.5",
         "org.scalatest" %% "scalatest" % "1.9.1" % "test",
         "com.typesafe.akka" %% "akka-testkit" % akkaVersion % "test",
-        "ch.qos.logback" % "logback-classic" % "1.0.7" % "test"
+        "org.slf4j" % "slf4j-log4j" % "1.7.5" % "test",
+        "log4j" % "log4j" % "1.2.16" % "test"
       )
     )
   ).settings(net.virtualvoid.sbt.graph.Plugin.graphSettings: _*)
